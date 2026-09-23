@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Vayyom Spa",
+    "slug": "vayyom-spa",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vayyom.spa"
+    },
+    "android": {
+      "package": "com.vayyom.spa"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar"
+    ]
+  }
+}

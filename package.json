@@ -1,0 +1,45 @@
+{
+    "name":  "vayyom-spa",
+    "private":  true,
+    "version":  "0.1.0",
+    "workspaces":  [
+                       "apps/*",
+                       "packages/*"
+                   ],
+    "scripts":  {
+                    "dev":  "npm run build -w @vayyom/shared \u0026\u0026 concurrently -n api,web \"npm run dev -w @vayyom/api\" \"npm run dev -w @vayyom/web\"",
+                    "dev:mobile":  "npm run start -w @vayyom/mobile",
+                    "dev:worker":  "npm run dev -w @vayyom/worker",
+                    "build":  "npm run build -w @vayyom/shared \u0026\u0026 npm run build -w @vayyom/api \u0026\u0026 npm run build -w @vayyom/worker \u0026\u0026 npm run build -w @vayyom/web",
+                    "typecheck":  "npm run typecheck --workspaces --if-present",
+                    "test":  "tsx --test tests/*.test.ts",
+                    "db:generate":  "prisma generate",
+                    "db:migrate":  "prisma migrate dev",
+                    "db:deploy":  "prisma migrate deploy",
+                    "db:seed":  "tsx prisma/seed.ts",
+                    "db:studio":  "prisma studio",
+                    "test:integration":  "tsx tests/integration.ts",
+                    "test:browser":  "tsx tests/browser.ts"
+                },
+    "dependencies":  {
+                         "@prisma/client":  "6.19.0",
+                         "bcryptjs":  "^3.0.2",
+                         "dotenv":  "^16.6.1"
+                     },
+    "devDependencies":  {
+                            "@playwright/test":  "^1.63.0",
+                            "@types/node":  "^22.15.0",
+                            "concurrently":  "^9.1.2",
+                            "prisma":  "6.19.0",
+                            "tsx":  "^4.20.0",
+                            "typescript":  "^5.8.3"
+                        },
+    "prisma":  {
+                   "seed":  "tsx prisma/seed.ts"
+               },
+    "overrides":  {
+                      "effect":  "^3.20.0",
+                      "uuid":  "^11.1.1",
+                      "deepmerge-ts":  "^8.0.0"
+                  }
+}

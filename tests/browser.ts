@@ -1,0 +1,82 @@
+import 'dotenv/config';
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+import {PrismaClient} from '@prisma/client';
+import {randomUUID} from 'node:crypto';
+import {hash} from 'bcryptjs';
+const db=new PrismaClient(),suffix=randomUUID().slice(0,8);
+let orgId='';
+async function main(){
+ const org=await db.organization.create({data:{name:'Browser test '+suffix}});orgId=org.id;
+ const store=await db.store.create({data:{organizationId:orgId,name:'Vayyom · Test studio',opensAt:'00:00',closesAt:'23:59'}});
+ const password=randomUUID()+randomUUID(),username='browser-'+suffix;
+ const user=await db.user.create({data:{organizationId:orgId,username,name:'Browser Admin',passwordHash:await hash(password,4),role:'ADMIN',storeIds:[store.id]}});
+ await db.catalogItem.create({data:{organizationId:orgId,name:'Relaxation Therapy',type:'SERVICE',price:'100',taxRate:'18',duration:60,createdBy:user.id,updatedBy:user.id}});
+ const browser=await chromium.launch({channel:'chrome',headless:true});
+ try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://localhost:5173');
+ await page.getByLabel('Username',{exact:true}).fill(username);
+ await page.getByLabel('Password',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.getByRole('heading',{name:'Your studio, at a glance'}).waitFor();
+ await page.getByRole('button',{name:'Customers',exact:true}).click();
+ await page.getByRole('button',{name:'Add customer',exact:true}).click();
+ await page.getByLabel('Full name').fill('Browser Guest');
+ await page.getByLabel('Mobile number').fill('+918'+String(Date.now()).slice(-9));
+ await page.getByRole('button',{name:'Save',exact:true}).click();
+ await page.getByRole('cell',{name:'Browser Guest',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Appointments',exact:true}).click();
+ await page.getByRole('button',{name:'New appointment',exact:true}).click();
+ const dialog=page.getByRole('dialog');
+ await dialog.locator('select[name=customerId]').selectOption({label:'Browser Guest'});
+ await dialog.locator('select[name=serviceId]').selectOption({label:'Relaxation Therapy'});
+ await dialog.locator('select[name=providerId]').selectOption({label:'Browser Admin'});
+ const date=new Date();date.setDate(date.getDate()+2);
+ const local=date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0')+'T10:00';
+ await dialog.getByLabel('Start time (your device timezone)').fill(local);
+ await dialog.getByRole('button',{name:'Save',exact:true}).click();
+ await page.getByRole('button',{name:'checked in',exact:true}).click();
+ await page.getByRole('button',{name:'in progress',exact:true}).click();
+ await page.getByRole('button',{name:'completed',exact:true}).click();
+ await page.getByRole('cell',{name:'completed',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Billing / POS',exact:true}).click();
+ await page.getByLabel('Completed appointment (optional)').selectOption({label:'Browser Guest · Relaxation Therapy'});
+ await page.getByRole('button',{name:'Post invoice',exact:true}).click();
+ await page.getByRole('status').waitFor();
+ await page.getByRole('button',{name:'Invoices',exact:true}).click();
+ await page.getByRole('button',{name:'Collect',exact:true}).click();
+ await page.getByLabel('Payment method').selectOption('UPI');
+ await page.getByLabel('Amount (INR)').fill('118');
+ await page.getByLabel('UPI reference (required for UPI)').fill('BROWSER-'+suffix);
+ await page.getByRole('button',{name:'Save',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Payments',exact:true}).click();
+ await page.getByRole('button',{name:'Verify',exact:true}).click();
+ await page.getByRole('cell',{name:'paid',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Invoices',exact:true}).click();
+ await page.getByRole('button',{name:'View / print',exact:true}).click();
+ await page.getByRole('button',{name:'Print invoice & receipts'}).waitFor();
+ assert.ok(await page.getByRole('dialog').textContent().then(t=>t?.includes('RCT-')));
+ await page.getByRole('button',{name:'Close dialog'}).click();
+ await page.getByRole('button',{name:'Overview',exact:true}).click();
+ await page.getByText('₹118.00',{exact:true}).first().waitFor();
+ await page.screenshot({path:'.local/phase1-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ await page.waitForFunction(()=>document.querySelector('.sidebar')!.getBoundingClientRect().right<=0);
+ await page.screenshot({path:'.local/phase1-responsive.png',fullPage:true,animations:'disabled'});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false,'Mobile viewport should not overflow horizontally');
+ assert.deepEqual(errors,[]);
+ console.log('PASS browser: login → customer → appointment → status workflow → linked invoice → UPI → verification → receipt');
+ console.log('PASS desktop and responsive viewport; no browser runtime errors');
+ }finally{await browser.close();}
+}
+async function cleanup(){
+ if(!orgId)return;
+ await db.$transaction(async tx=>{
+ for(const model of ['command','auditEvent','statusHistory','outboxEvent','payment','invoiceItem','invoice','stockLedger','stockBalance','appointment','catalogItem','customer','sequence','user','store'] as const)await (tx[model] as any).deleteMany({where:{organizationId:orgId}});
+ await tx.organization.delete({where:{id:orgId}});
+ });
+}
+main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await cleanup();await db.$disconnect();});

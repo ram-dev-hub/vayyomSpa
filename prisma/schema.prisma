@@ -1,0 +1,236 @@
+generator client {
+ provider = "prisma-client-js"
+}
+datasource db {
+ provider = "mysql"
+ url = env("DATABASE_URL")
+}
+model Organization {
+ id String @id @default(uuid()) @db.Char(36)
+ name String @db.VarChar(160)
+ createdAt DateTime @default(now())
+}
+model Store {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ name String @db.VarChar(160)
+ timezone String @default("Asia/Kolkata") @db.VarChar(64)
+ opensAt String @default("09:00") @db.VarChar(5)
+ closesAt String @default("20:00") @db.VarChar(5)
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ version Int @default(1)
+ @@index([organizationId])
+}
+model User {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ username String @unique @db.VarChar(100)
+ name String @db.VarChar(160)
+ passwordHash String @db.VarChar(255)
+ role String @db.VarChar(32)
+ storeIds Json
+ active Boolean @default(true)
+ failedAttempts Int @default(0)
+ lockedUntil DateTime?
+ sessionVersion Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([organizationId])
+}
+model Customer {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ name String @db.VarChar(160)
+ mobile String @db.VarChar(20)
+ email String? @db.VarChar(254)
+ marketingConsent Boolean @default(false)
+ active Boolean @default(true)
+ createdBy String @db.Char(36)
+ updatedBy String @db.Char(36)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ version Int @default(1)
+ @@unique([organizationId,mobile])
+ @@index([organizationId,name])
+}
+model CatalogItem {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ type String @db.VarChar(16)
+ name String @db.VarChar(160)
+ sku String? @db.VarChar(80)
+ price Decimal @db.Decimal(12,2)
+ taxRate Decimal @db.Decimal(5,2)
+ currency String @default("INR") @db.Char(3)
+ duration Int @default(60)
+ minimumStock Int @default(5)
+ active Boolean @default(true)
+ createdBy String @db.Char(36)
+ updatedBy String @db.Char(36)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ version Int @default(1)
+ @@unique([organizationId,sku])
+ @@index([organizationId,type,active])
+}
+model Appointment {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String @db.Char(36)
+ customerId String @db.Char(36)
+ serviceId String @db.Char(36)
+ providerId String @db.Char(36)
+ startsAt DateTime
+ endsAt DateTime
+ timezone String @default("Asia/Kolkata") @db.VarChar(64)
+ status String @default("CONFIRMED") @db.VarChar(24)
+ notes String? @db.VarChar(500)
+ createdBy String @db.Char(36)
+ updatedBy String @db.Char(36)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ version Int @default(1)
+ @@index([organizationId,storeId,startsAt,status])
+ @@index([providerId,startsAt,endsAt])
+}
+model Invoice {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String @db.Char(36)
+ customerId String @db.Char(36)
+ appointmentId String? @unique @db.Char(36)
+ number String @db.VarChar(80)
+ currency String @default("INR") @db.Char(3)
+ status String @default("POSTED") @db.VarChar(24)
+ subtotal Decimal @db.Decimal(12,2)
+ discountTotal Decimal @db.Decimal(12,2)
+ taxTotal Decimal @db.Decimal(12,2)
+ grandTotal Decimal @db.Decimal(12,2)
+ paidTotal Decimal @default(0) @db.Decimal(12,2)
+ dueTotal Decimal @db.Decimal(12,2)
+ items InvoiceItem[]
+ payments Payment[]
+ createdBy String @db.Char(36)
+ updatedBy String @db.Char(36)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ version Int @default(1)
+ @@unique([organizationId,number])
+ @@index([organizationId,storeId,createdAt])
+ @@index([customerId,createdAt])
+}
+model InvoiceItem {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ invoiceId String @db.Char(36)
+ invoice Invoice @relation(fields:[invoiceId],references:[id])
+ catalogItemId String @db.Char(36)
+ description String @db.VarChar(160)
+ type String @db.VarChar(16)
+ quantity Int
+ unitPrice Decimal @db.Decimal(12,2)
+ taxRate Decimal @db.Decimal(5,2)
+ discount Decimal @db.Decimal(12,2)
+ tax Decimal @db.Decimal(12,2)
+ total Decimal @db.Decimal(12,2)
+}
+model Payment {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String @db.Char(36)
+ invoiceId String @db.Char(36)
+ invoice Invoice @relation(fields:[invoiceId],references:[id])
+ method String @db.VarChar(12)
+ amount Decimal @db.Decimal(12,2)
+ currency String @default("INR") @db.Char(3)
+ reference String? @db.VarChar(100)
+ status String @db.VarChar(32)
+ receiptNumber String? @unique @db.VarChar(80)
+ verifiedBy String? @db.Char(36)
+ reason String? @db.VarChar(500)
+ createdBy String @db.Char(36)
+ updatedBy String @db.Char(36)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ version Int @default(1)
+ @@unique([storeId,reference])
+ @@index([organizationId,storeId,createdAt])
+}
+model StockBalance {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String @db.Char(36)
+ productId String @db.Char(36)
+ onHand Int @default(0)
+ version Int @default(1)
+ updatedAt DateTime @updatedAt
+ @@unique([storeId,productId])
+ @@index([organizationId,storeId])
+}
+model StockLedger {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String @db.Char(36)
+ productId String @db.Char(36)
+ quantity Int
+ type String @db.VarChar(24)
+ referenceId String @db.VarChar(100)
+ reason String @db.VarChar(500)
+ createdBy String @db.Char(36)
+ createdAt DateTime @default(now())
+ @@index([organizationId,storeId,productId,createdAt])
+}
+model Sequence {
+ id String @id @db.VarChar(120)
+ organizationId String @db.Char(36)
+ value Int @default(0)
+}
+model Command {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String @db.Char(36)
+ actorId String @db.Char(36)
+ key String @db.VarChar(100)
+ fingerprint String @db.Char(64)
+ result Json
+ createdAt DateTime @default(now())
+ @@unique([organizationId,key])
+}
+model AuditEvent {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String? @db.Char(36)
+ actorId String @db.Char(36)
+ entityId String @db.Char(36)
+ action String @db.VarChar(100)
+ traceId String @db.VarChar(64)
+ createdAt DateTime @default(now())
+ @@index([organizationId,createdAt])
+}
+model StatusHistory {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ entityId String @db.Char(36)
+ fromStatus String @db.VarChar(32)
+ toStatus String @db.VarChar(32)
+ actorId String @db.Char(36)
+ createdAt DateTime @default(now())
+ @@index([organizationId,entityId])
+}
+model OutboxEvent {
+ id String @id @default(uuid()) @db.Char(36)
+ organizationId String @db.Char(36)
+ storeId String @db.Char(36)
+ type String @db.VarChar(100)
+ entityId String @db.Char(36)
+ traceId String @db.VarChar(64)
+ status String @default("PENDING") @db.VarChar(24)
+ attempts Int @default(0)
+ availableAt DateTime @default(now())
+ lockedUntil DateTime?
+ lastError String? @db.VarChar(500)
+ createdAt DateTime @default(now())
+ @@index([status,availableAt])
+}

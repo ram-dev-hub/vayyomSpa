@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {calculateLine,minor,major} from '../packages/shared/src';
+import {storeTime,transitions,paymentInput,invoiceInput} from '../apps/api/src/validation';
+test('money remains exact in paise',()=>{assert.equal(minor('0.10')+minor('0.20'),30n);assert.equal(major(12345n),'123.45');assert.throws(()=>minor('1.234'));assert.throws(()=>minor('-1'));assert.throws(()=>minor('NaN'));});
+test('server rounds tax after discount with fixed precision',()=>{assert.deepEqual(calculateLine('1800.00',2,'18','10'),{subtotal:'3600.00',discount:'360.00',tax:'583.20',total:'3823.20'});assert.deepEqual(calculateLine('0.05',1,'10'),{subtotal:'0.05',discount:'0.00',tax:'0.01',total:'0.06'});});
+test('invalid price calculations are rejected',()=>{assert.throws(()=>calculateLine('100',0,'18'));assert.throws(()=>calculateLine('100',1.5,'18'));assert.throws(()=>calculateLine('100',1,'18','101'));});
+test('UPI references are mandatory, amounts positive, extra properties rejected',()=>{const base={invoiceId:'00000000-0000-4000-8000-000000000000',method:'UPI',amount:'100'};assert.equal(paymentInput.safeParse(base).success,false);assert.equal(paymentInput.safeParse({...base,reference:'TX123456'}).success,true);assert.equal(paymentInput.safeParse({...base,method:'CASH',amount:'0'}).success,false);assert.equal(paymentInput.safeParse({...base,method:'CASH',status:'PAID'}).success,false);});
+test('client cannot override prices or totals',()=>{assert.equal(invoiceInput.safeParse({customerId:'00000000-0000-4000-8000-000000000000',items:[{catalogItemId:'00000000-0000-4000-8000-000000000000',quantity:1,price:'1'}]}).success,false);});
+test('store local timezone correctly crosses UTC date boundary',()=>{assert.deepEqual(storeTime(new Date('2026-09-22T20:00:00Z'),'Asia/Kolkata'),{day:'2026-09-23',time:'01:30'});});
+test('completed and cancelled appointments cannot be arbitrarily reopened',()=>{assert.equal(transitions.COMPLETED,undefined);assert.equal(transitions.CANCELLED,undefined);assert.ok(transitions.IN_PROGRESS.includes('COMPLETED'));});
